@@ -27,57 +27,72 @@ fn gpio_write(reg: int, val: u32) {
 }
 
 fn gpio_reg_idx_from(pin: int) -> (int, int) {
-    let mut reg: int = pin;
-    let mut idx: int = 0;
-    while reg > 9 {
-        reg -= 10;
-        idx += 1;
+    let mut idx: int = pin;
+    let mut reg: int = 0;
+    while idx > 9 {
+        idx -= 10;
+        reg += 1;
     }
     (reg, idx)
 }
 
-// GPIO setup macros. Always use INP_GPIO(x) before using OUT_GPIO(x) or SET_GPIO_ALT(x,y)
-fn gpio_inp(pin: int) {
-    if pin > 53 { return; }
+fn gpio_set_func(pin: int, func: u32) {
+    if pin < 0 || pin > 53 { return; }
+    if func < 0 || func > 7 { return; }
 
     let (reg, idx) = gpio_reg_idx_from(pin);
-    let mask = !(0x7 << (3 * idx));
-    gpio_write(reg, gpio_read(reg) & mask);
+
+    let val: u32 = func << idx;
+    let mask: u32 = 0x7 << idx;
+
+    let old_func = gpio_read(reg);
+    let new_func = (old_func & !mask) | val;
+
+    gpio_write(reg, new_func);
 }
 
-fn gpio_out(pin: int) {
+fn gpio_set(pin: int, val: u32) {
     if pin > 53 { return; }
 
-    let (reg, idx) = gpio_reg_idx_from(pin);
-    let val = 1 << (3 * idx);
-    gpio_write(reg, gpio_read(reg) | val);
+    let idx: u32 = 1 << (pin & 0x1f);
+    let reg = (pin >> 5) +
+        match val {
+            0 => 10,
+            _ =>  7
+        };
+    gpio_write(reg, idx);
 }
 
-fn gpio_set(pin: int) {
-    if pin > 53 { return; }
+/* System Timer */
+static SYSTEM_TIMER_COUNTER_LO: *u32 = 0x20003004 as *u32;
 
-    let reg = 7 + (pin >> 5);
-    let val = 1 << (pin & 32);
-    gpio_write(reg, val);
-}
-
-fn gpio_clr(pin: int) {
-    if pin > 53 {
-        return;
+fn system_timer_timestamp_lo() -> u32 {
+    unsafe {
+        volatile_load(SYSTEM_TIMER_COUNTER_LO)
     }
-
-    let reg = 10 + (pin >> 5);
-    let val = 1 << (pin & 0x1f);
-    gpio_write(reg, val);
 }
 
+
+
+/* delay is in microseconds. */
+fn usleep(delay: u32) {
+    let start = system_timer_timestamp_lo();
+    let mut elapsed = 0;
+    while elapsed < delay {
+        elapsed = system_timer_timestamp_lo() - start;
+    }
+}
+
+/* */
 #[no_mangle]
 #[no_split_stack]
 pub fn main() {
-    gpio_inp(STATUS_LED_N);
-    gpio_out(STATUS_LED_N);
-    gpio_clr(STATUS_LED_N);
+    gpio_set_func(STATUS_LED_N, 1);
 
     loop {
+        gpio_set(STATUS_LED_N, 0);
+        usleep(500000);
+        gpio_set(STATUS_LED_N, 1);
+        usleep(250000);
     }
 }
