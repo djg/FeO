@@ -71,17 +71,6 @@ fn gpio_clr(pin: int) {
     gpio_write(reg, val);
 }
 
-// Failure
-/*
-#[lang="fail_"]
-pub fn fail(_: *i8, _: *i8, _: uint) -> ! {
-    unsafe {
-        abort()
-    }
-}
-*/
-
-
 #[no_mangle]
 #[no_split_stack]
 pub fn main() {
