@@ -2,64 +2,66 @@
 #![feature(asm)]
 #![no_std]
 
-/* GPIO controller */
-static GPIO_BASE: uint = 0x20200000;
-static STATUS_LED_N: u32 = 16;
+extern "rust-intrinsic" {
 
-fn gpio_read(reg: u32) -> u32 {
-    let mut result : u32;
-    unsafe {
-        asm!("LDR $0, [$1, $2, LSL #2]"
-             : "=r"(result) : "r"(GPIO_BASE), "r"(reg) :: "volatile");
-    }
-    result
+    pub fn offset<T>(dst: *T, offset: int) -> *T;
+    pub fn volatile_load<T>(src: *T) -> T;
+    pub fn volatile_store<T>(dst: *mut T, val: T);
+
 }
 
-fn gpio_write(reg: u32, val: u32) {
+/* GPIO controller */
+static GPIO_BASE: *u32 = 0x20200000 as *u32;
+static STATUS_LED_N: int = 16;
+
+fn gpio_read(reg: int) -> u32 {
     unsafe {
-        asm!("STR $0, [$1, $2, LSL #2]"
-             :: "r"(val), "r"(GPIO_BASE), "r"(reg) :: "volatile");
+        volatile_load(offset(GPIO_BASE, reg))
     }
+}
+
+fn gpio_write(reg: int, val: u32) {
+    unsafe {
+        volatile_store(offset(GPIO_BASE, reg) as *mut u32, val);
+    }
+}
+
+fn gpio_reg_idx_from(pin: int) -> (int, int) {
+    let mut reg: int = pin;
+    let mut idx: int = 0;
+    while reg > 9 {
+        reg -= 10;
+        idx += 1;
+    }
+    (reg, idx)
 }
 
 // GPIO setup macros. Always use INP_GPIO(x) before using OUT_GPIO(x) or SET_GPIO_ALT(x,y)
-fn gpio_inp(p: u32) {
-    if p > 53 {
-        return;
-    }
-    let mut pin = p;
-    let mut reg = 0;
-    while pin > 9 {
-        pin -= 10;
-        reg += 1;
-    }
-    let mask = !(0x7 << (3 * pin));
+fn gpio_inp(pin: int) {
+    if pin > 53 { return; }
+
+    let (reg, idx) = gpio_reg_idx_from(pin);
+    let mask = !(0x7 << (3 * idx));
     gpio_write(reg, gpio_read(reg) & mask);
 }
 
-fn gpio_out(p: u32) {
-    let mut pin = p;
-    let mut reg = 0;
-    while pin > 9 {
-        pin -= 10;
-        reg += 1;
-    }
-    let val = 1 << (3 * pin);
-    gpio_write(reg, gpio_read(reg) | val);
+fn gpio_out(pin: int) {
+    if pin > 53 { return; }
 
+    let (reg, idx) = gpio_reg_idx_from(pin);
+    let val = 1 << (3 * idx);
+    gpio_write(reg, gpio_read(reg) | val);
 }
 
-fn gpio_set(pin: u32) {
-    if pin > 53 {
-        return;
-    }
+fn gpio_set(pin: int) {
+    if pin > 53 { return; }
 
     let reg = 7 + (pin >> 5);
     let val = 1 << (pin & 32);
     gpio_write(reg, val);
 }
 
-fn gpio_clr(pin: u32) {
+fn gpio_clr(pin: int) {
     if pin > 53 {
         return;
     }
