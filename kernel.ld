@@ -1,17 +1,17 @@
 SECTIONS {
     .init 0x8000 : {
-        *(.init)
+        * (.init)
     }
 
     .text : {
-        *(.text)
+        * (.text)
     }
 
     .data : {
-        *(.data)
+        * (.data)
     }
 
     /DISCARD/ : {
-        *(*)
+        * (*)
     }
 }

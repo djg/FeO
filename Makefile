@@ -1,11 +1,9 @@
 RUSTC := rustc --target arm-unknown-linux-gnueabihf
-ARMGNU := /Volumes/xtools/arm-none-eabi/bin/arm-none-eabi
+ARMPATH := /Volumes/xtools/arm-none-eabi/bin
+ARMGNU := $(ARMPATH)/arm-none-eabi
 
 # The intermediate directory for compiled object files.
 BUILD = build/
-
-# The directory in which source files are stored.
-SOURCE = source/
 
 # The name of the output file to generate.
 TARGET = kernel.img
@@ -20,8 +18,8 @@ MAP = kernel.map
 LINKER = kernel.ld
 
 # The names of all object files that must be generated.
-OBJECTS := $(patsubst $(SOURCE)%.s,$(BUILD)%.o,$(wildcard $(SOURCE)*.s))
-OBJECTS += $(patsubst $(SOURCE)%.rs,$(BUILD)%.o,$(wildcard $(SOURCE)*.rs))
+OBJECTS := $(patsubst asm/%.s,$(BUILD)%.o,$(wildcard asm/*.s))
+OBJECTS += $(patsubst kernel/%.rs,$(BUILD)%.o,$(wildcard kernel/*.rs))
 
 all: $(TARGET) $(LIST)
 
@@ -40,14 +38,12 @@ $(BUILD)output.elf: $(OBJECTS) $(LINKER)
 	$(ARMGNU)-ld --no-undefined $(OBJECTS) -Map $(MAP) -o $(BUILD)output.elf -T $(LINKER)
 
 # Rule to make the object files
-$(BUILD)%.o: $(SOURCE)%.rs $(BUILD)
-	$(RUSTC) -O --emit obj --crate-type=lib -o $@ $<
+$(BUILD)%.o: kernel/%.rs
+	$(RUSTC) -O --out-dir $(BUILD) --emit obj --crate-type=lib -o $@ $<
 
-$(BUILD)%.o: $(SOURCE)%.s $(BUILD)
-	$(ARMGNU)-as -I $(SOURCE) -o $@ $<
-
-$(BUILD):
-	mkdir $@
+$(BUILD)%.o: asm/%.s
+	-mkdir $(BUILD)
+	$(ARMGNU)-as -o $@ $<
 
 # Rule to clean files.
 clean:
