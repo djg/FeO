@@ -1,2 +1,2 @@
-FeO - A Rust Kernel for Raspberry Pi
+Iron Oxide - A Rust Kernel for Raspberry Pi
 ===
