@@ -1,53 +1,76 @@
-RUSTC := rustc --target arm-unknown-linux-gnueabihf
-ARMPATH := /Volumes/xtools/arm-none-eabi/bin
-ARMGNU := $(ARMPATH)/arm-none-eabi
+ARMPATH :=
+RUSTPATH :=
+
+-include ./config.mk
+
+ARMGNU := $(ARMPATH)arm-none-eabi
 
 # The intermediate directory for compiled object files.
 BUILD = build/
 
-# The name of the output file to generate.
-TARGET = kernel.img
+KERNEL := $(BUILD)kernel.elf
+
+IMAGE := $(BUILD)kernel.img
 
 # The name of the assembler listing file to generate.
-LIST = kernel.list
+LIST := $(BUILD)kernel.list
 
 # The name of the map file to generate.
-MAP = kernel.map
+MAP := $(BUILD)kernel.map
 
 # The name of the linker script to use.
-LINKER = kernel.ld
+LINKER = src/kernel.ld
+
+RUSTC := $(RUSTPATH)rustc
+RUSTCFLAGS := -O --target arm-unknown-linux-gnueabihf
+
+LD := $(ARMGNU)-ld
+LDFLAGS := --no-undefined -Map $(MAP)
+
+AS := $(ARMGNU)-as
+ASFLAGS :=
+
+OBJDIR := $(BUILD)obj/
+
+RSRCS := src/main.rs
+ASMSRCS := src/start.S
 
 # The names of all object files that must be generated.
-OBJECTS := $(patsubst asm/%.s,$(BUILD)%.o,$(wildcard asm/*.s))
-OBJECTS += $(patsubst kernel/%.rs,$(BUILD)%.o,$(wildcard kernel/*.rs))
+OBJECTS := $(patsubst %.rs,$(OBJDIR)%.o,$(RSRCS))
+OBJECTS += $(patsubst %.S,$(OBJDIR)%.S.o,$(ASMSRCS))
 
-all: $(TARGET) $(LIST)
+.PHONY: clean all
+
+all: $(KERNEL) $(IMAGE) $(LIST)
 
 rebuild: all
 
 # Rule to make the listing file
-$(LIST): $(BUILD)output.elf
-	$(ARMGNU)-objdump -d $(BUILD)output.elf > $(LIST)
+$(LIST): $(KERNEL)
+	@echo "[LIST]" $@
+	@$(ARMGNU)-objdump -d $(KERNEL) > $(LIST)
 
 # Rule to make the image file.
-$(TARGET): $(BUILD)output.elf
-	$(ARMGNU)-objcopy $(BUILD)output.elf -O binary $(TARGET)
+$(IMAGE): $(KERNEL)
+	@echo "[IMG ]" $@
+	@$(ARMGNU)-objcopy $(KERNEL) -O binary $(IMAGE)
 
 # Rule to make the elf file.
-$(BUILD)output.elf: $(OBJECTS) $(LINKER)
-	$(ARMGNU)-ld --no-undefined $(OBJECTS) -Map $(MAP) -o $(BUILD)output.elf -T $(LINKER)
+$(KERNEL): $(OBJECTS) $(LINKER)
+	@echo "[LINK]" $@
+	@$(LD) $(LDFLAGS) -o $@ -T $(LINKER) $(OBJECTS)
 
 # Rule to make the object files
-$(BUILD)%.o: kernel/%.rs
-	$(RUSTC) -O --out-dir $(BUILD) --emit obj --crate-type=lib -o $@ $<
+$(OBJDIR)%.o: %.rs
+	@-mkdir -p `dirname $@`
+	@echo "[RUST]" $@
+	@$(RUSTC) $(RUSTCFLAGS) --emit obj --crate-type=lib -o $@ $<
 
-$(BUILD)%.o: asm/%.s
-	-mkdir $(BUILD)
-	$(ARMGNU)-as -o $@ $<
+$(OBJDIR)%.S.o: %.S
+	@-mkdir -p `dirname $@`
+	@echo "[AS  ]" $@
+	@$(AS) $(ASFLAGS) -o $@ $<
 
 # Rule to clean files.
 clean:
 	-rm -fr $(BUILD)
-	-rm -f $(TARGET)
-	-rm -f $(LIST)
-	-rm -f $(MAP)
